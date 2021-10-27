@@ -1,0 +1,74 @@
+PE1
+
+set system host-name PE1
+set system root-authentication encrypted-password "$6$6xO1.HNG$XXqzJ04PBXbkKVc3mk8/O5d32fDLqx6TjVJK7IyGSWdyGKr23VdGxsc7z/jm16bTHCpsVjTzyM8H7CopUZC810"
+set system login user ops uid 2001
+set system login user ops class super-user
+set system login user ops authentication encrypted-password "$6$NO387E/x$1uZlO1gsaec9ki/BVsyc1TNYPeCfPisyJKWy/prV66tNhfgcND3i8xPvzK07osmvL2cv5XXPf8t3HntAB4A2M."
+set chassis fpc 0 lite-mode
+set interfaces ge-0/0/2 vlan-tagging
+set interfaces ge-0/0/2 unit 1 vlan-id 101
+set interfaces ge-0/0/2 unit 1 family inet address 10.1.1.1/24
+set interfaces ge-0/0/2 unit 2 vlan-id 102
+set interfaces ge-0/0/2 unit 2 family inet address 10.2.1.1/24
+set interfaces ge-0/0/3 unit 0 family inet address 10.100.5.1/24
+set interfaces ge-0/0/3 unit 0 family iso
+set interfaces ge-0/0/3 unit 0 family mpls
+set interfaces ge-0/0/6 unit 0 family inet address 10.100.1.2/24
+set interfaces ge-0/0/6 unit 0 family iso
+set interfaces ge-0/0/6 unit 0 family mpls
+set interfaces lo0 unit 0 family inet address 10.101.1.1/32
+set interfaces lo0 unit 0 family iso address 49.0000.0000.0001.00
+set policy-options policy-statement white-exp term unicast from family inet
+set policy-options policy-statement white-exp term unicast then community add white-target
+set policy-options policy-statement white-exp term unicast then accept
+set policy-options policy-statement white-exp term mvpn from family inet-mvpn
+set policy-options policy-statement white-exp term mvpn then community add white-sender-mvpn
+set policy-options policy-statement white-exp term mvpn then accept
+set policy-options policy-statement white-imp term unicast from family inet
+set policy-options policy-statement white-imp term unicast from community white-target
+set policy-options policy-statement white-imp term unicast then accept
+set policy-options policy-statement white-imp term mvpn from family inet-mvpn
+set policy-options policy-statement white-imp term mvpn from community white-receiver-mvpn
+set policy-options policy-statement white-imp term mvpn then accept
+set policy-options community white-receiver-mvpn members target:65000:2
+set policy-options community white-sender-mvpn members target:65000:22
+set policy-options community white-target members target:65000:222
+set routing-instances black routing-options static route 10.11.1.0/24 next-hop 10.1.1.2
+set routing-instances black routing-options multicast ssm-groups 239.0.0.0/14
+set routing-instances black protocols pim interface all mode sparse
+set routing-instances black protocols mvpn
+set routing-instances black instance-type vrf
+set routing-instances black provider-tunnel rsvp-te label-switched-path-template default-template
+set routing-instances black interface ge-0/0/2.1
+set routing-instances black route-distinguisher 65000:100
+set routing-instances black vrf-target target:65000:111
+set routing-instances black vrf-table-label
+set routing-instances white routing-options static route 10.22.1.0/24 next-hop 10.2.1.2
+set routing-instances white routing-options multicast ssm-groups 239.0.0.0/8
+set routing-instances white protocols pim interface all mode sparse
+set routing-instances white protocols mvpn
+set routing-instances white instance-type vrf
+set routing-instances white provider-tunnel rsvp-te label-switched-path-template default-template
+set routing-instances white interface ge-0/0/2.2
+set routing-instances white route-distinguisher 65000:200
+set routing-instances white vrf-import white-imp
+set routing-instances white vrf-export white-exp
+set routing-instances white vrf-table-label
+set routing-options router-id 10.101.1.1
+set routing-options autonomous-system 65000
+set protocols bgp group RR type internal
+set protocols bgp group RR local-address 10.101.1.1
+set protocols bgp group RR family inet-vpn unicast
+set protocols bgp group RR family inet-mvpn signaling
+set protocols bgp group RR neighbor 10.101.5.5
+set protocols isis interface ge-0/0/3.0 level 2 metric 50
+set protocols isis interface ge-0/0/6.0
+set protocols isis interface lo0.0      
+set protocols isis level 1 disable
+set protocols ldp interface ge-0/0/3.0
+set protocols ldp interface ge-0/0/6.0
+set protocols mpls interface ge-0/0/3.0
+set protocols mpls interface ge-0/0/6.0
+set protocols rsvp interface ge-0/0/3.0
+set protocols rsvp interface ge-0/0/6.0

@@ -1,0 +1,306 @@
+mcast commands:
+
+PLAIN MULTICAST:
+set protocols igmp interface ge-0/0/1.1 static group 239.1.1.1 source 10.11.1.1
+//on CE
+
+//on PE:
+ops@PE3# run show pim join instance black    
+Instance: PIM.black Family: INET
+R = Rendezvous Point Tree, S = Sparse, W = Wildcard
+
+Group: 239.1.1.1
+    Source: 10.11.1.1
+    Flags: sparse,spt
+    Upstream interface: unknown (no neighbor)
+
+
+
+//check for PIM adjacencies
+ops@PE3# run show pim neighbors instance black    
+Instance: PIM.black
+Interface           IP V Mode        Option       Uptime Neighbor addr
+ge-0/0/2.1           4 2             HPLGTA      00:01:33 10.1.3.2       
+
+
+//on FHR, to check if its receiveing Mcast traffic:
+ops@CE1# run show multicast route instance black group 239.1.1.1 
+Instance: black Family: INET
+
+Group: 239.1.1.1
+    Source: 10.11.1.1/32
+    Upstream interface: ge-0/0/5.1
+	
+//however C-Joins are not propagated across the backbone, CE1 doe snot forward the mcast traffic dosnstream. (not confogured yet)
+//so it shouldn't display any downstream interfaces for the C-Multicast flows:
+
+ops@CE3# run show multicast route instance black group 239.1.1.1 
+Instance: black Family: INET
+
+Group: 239.1.1.1
+    Source: 10.11.1.1/32
+    Upstream interface: ge-0/0/2.1
+    Downstream interface list: 
+        ge-0/0/1.1
+//thanks to correctly working UNICAST routing - we see a properly built upstrea and downstream interfaces lists		
+
+//Examining the ine-mvpn route advertisement by each sender site
+ops@PE2# run show route advertising-protocol bgp 10.101.5.5 table white.mvpn                      
+
+white.mvpn.0: 3 destinations, 3 routes (3 active, 0 holddown, 0 hidden)
+  Prefix                  Nexthop              MED     Lclpref    AS path
+  1:65000:200:10.101.2.2/240                   
+*                         Self                         100        I
+
+ops@PE2# run show route advertising-protocol bgp 10.101.5.5 table white.mvpn extensive | match communities
+     Communities: target:65000:22
+	 
+	 
+	 
+//display the resulting Multicast VPN neighbours discovered for each VRF:
+ops@PE1# run show mvpn neighbor    
+[...]    
+Instance : black
+  MVPN Mode : SPT-ONLY
+  Neighbor                      I-P-Tunnel
+  10.101.2.2            
+  10.101.3.3            
+  10.101.4.4            
+[...]                                        
+Instance : white
+  MVPN Mode : SPT-ONLY
+  Neighbor                      I-P-Tunnel
+  10.101.3.3            
+  10.101.4.4 
+  
+  
+//check for P2MP LSP's (signaled from Source PE (the root of the P-Tunnels). One is fr each VPN
+ops@PE1# run show rsvp session p2mp 
+Ingress RSVP: 5 sessions
+P2MP name: 65000:100:mvpn:black, P2MP branch count: 3
+To              From            State   Rt Style Labelin Labelout LSPname 
+10.101.2.2      10.101.1.1      Up       0  1 SE       -       16 10.101.2.2:65000:100:mvpn:black
+10.101.3.3      10.101.1.1      Up       0  1 SE       -   299888 10.101.3.3:65000:100:mvpn:black
+10.101.4.4      10.101.1.1      Up       0  1 SE       -   299888 10.101.4.4:65000:100:mvpn:black
+P2MP name: 65000:200:mvpn:white, P2MP branch count: 2
+To              From            State   Rt Style Labelin Labelout LSPname 
+10.101.3.3      10.101.1.1      Up       0  1 SE       -   299872 10.101.3.3:65000:200:mvpn:white
+10.101.4.4      10.101.1.1      Up       0  1 SE       -   299872 10.101.4.4:65000:200:mvpn:white
+Total 5 displayed, Up 5, Down 0
+
+//check what do the label valyes at an egress PE represent?
+ops@PE3# run show rsvp session p2mp 
+Ingress RSVP: 0 sessions
+Total 0 displayed, Up 0, Down 0
+
+Egress RSVP: 2 sessions
+P2MP name: 65000:100:mvpn:black, P2MP branch count: 1
+To              From            State   Rt Style Labelin Labelout LSPname 
+10.101.3.3      10.101.1.1      Up       0  1 SE      16        - 10.101.3.3:65000:100:mvpn:black
+P2MP name: 65000:200:mvpn:white, P2MP branch count: 1
+To              From            State   Rt Style Labelin Labelout LSPname 
+10.101.3.3      10.101.1.1      Up       0  1 SE      17        - 10.101.3.3:65000:200:mvpn:white
+
+ops@PE3# run show route label 16 
+
+mpls.0: 13 destinations, 13 routes (13 active, 0 holddown, 0 hidden)
++ = Active Route, - = Last Active, * = Both
+
+16                 *[VPN/0] 3d 17:15:22
+                    >  via lsi.0 (black), Pop      
+
+[edit]
+ops@PE3# run show route label 17    
+
+mpls.0: 13 destinations, 13 routes (13 active, 0 holddown, 0 hidden)
++ = Active Route, - = Last Active, * = Both
+
+17                 *[VPN/0] 3d 17:15:27
+                    >  via lsi.1 (white), Pop 
+					
+//check the PMIS tunnel attribute (Tunnel ID):
+ops@PE1# run show route advertising-protocol bgp 10.101.5.5 table black.mvpn extensive                                
+
+black.mvpn.0: 4 destinations, 4 routes (4 active, 0 holddown, 0 hidden)
+* 1:65000:100:10.101.1.1/240 (1 entry, 1 announced)
+ BGP group RR type Internal
+     Route Distinguisher: 65000:100
+     Nexthop: Self
+     Flags: Nexthop Change
+     Localpref: 100
+     AS path: [65000] I 
+     Communities: target:65000:111
+     PMSI: Flags 0x0: Label 0: RSVP-TE: Session_13[10.101.1.1:0:2144:10.101.1.1] //VPN black - Tunnel ID: 2144
+
+[edit]
+run show route advertising-protocol bgp 10.101.5.5 table white.mvpn extensive | match PMSI    
+     PMSI: Flags 0x0: Label 0: RSVP-TE: Session_13[10.101.1.1:0:2145:10.101.1.1] //VPN white - Tunnel ID: 2145
+
+
+//other way of chacking for the Tunnel ID
+ops@PE3# run show rsvp session p2mp extensive | match "p2mp|port" 
+
+P2MP name: 65000:100:mvpn:black, P2MP branch count: 1
+  P2MP LSPname: 65000:100:mvpn:black, Re-merge: None
+  Port number: sender 3 receiver 2144 protocol 0
+P2MP name: 65000:200:mvpn:white, P2MP branch count: 1
+  P2MP LSPname: 65000:200:mvpn:white, Re-merge: None
+  Port number: sender 2 receiver 2145 protocol 0	 
+  
+//command to check P2MP LSP to PE neighbors mappings:
+ops@PE1# run show mvpn instance 
+[...]
+Legend for provider tunnel
+S-    Selective provider tunnel
+Instance : black
+  MVPN Mode : SPT-ONLY
+  Sender-Based RPF: Disabled. Reason: Not enabled by configuration.
+  Hot Root Standby: Disabled. Reason: Not enabled by configuration.
+  Provider tunnel: I-P-tnl:RSVP-TE P2MP:10.101.1.1, 2144,10.101.1.1
+  Neighbor                      I-P-Tunnel
+  10.101.2.2                            
+  10.101.3.3            
+  10.101.4.4            
+    
+Instance : white
+  MVPN Mode : SPT-ONLY
+  Sender-Based RPF: Disabled. Reason: Not enabled by configuration.
+  Hot Root Standby: Disabled. Reason: Not enabled by configuration.
+  Provider tunnel: I-P-tnl:RSVP-TE P2MP:10.101.1.1, 2145,10.101.1.1
+  Neighbor                      I-P-Tunnel
+  10.101.3.3            
+  10.101.4.4            
+  
+ops@PE3# run show mvpn instance 
+[...]
+Legend for provider tunnel
+S-    Selective provider tunnel
+Instance : black
+  MVPN Mode : SPT-ONLY
+  Sender-Based RPF: Disabled. Reason: Not enabled by configuration.
+  Hot Root Standby: Disabled. Reason: Not enabled by configuration.
+  Provider tunnel: I-P-tnl:invalid
+  Neighbor                      Inclusive Provider Tunnel                           Label-In    St             Segment
+  10.101.1.1                    RSVP-TE P2MP:10.101.1.1, 2144,10.101.1.1                  16
+  10.101.2.2            
+  10.101.4.4            
+    
+Instance : white
+  MVPN Mode : SPT-ONLY
+  Sender-Based RPF: Disabled. Reason: Not enabled by configuration.
+  Hot Root Standby: Disabled. Reason: Not enabled by configuration.
+  Provider tunnel: I-P-tnl:invalid
+  Neighbor                      Inclusive Provider Tunnel                           Label-In    St             Segment
+  10.101.1.1                    RSVP-TE P2MP:10.101.1.1, 2145,10.101.1.1                  17
+  10.101.2.2            
+
+//issue this on Receiver PE, to check where is the receiver PE pointing to to reach the Source (this is unicast)
+ops@PE3# run show pim join instance black 
+Instance: PIM.black Family: INET
+R = Rendezvous Point Tree, S = Sparse, W = Wildcard
+
+Group: 239.1.1.1
+    Source: 10.11.1.1
+    Flags: sparse,spt
+    Upstream protocol: BGP
+    Upstream interface: Through BGP 
+	
+	
+//check the Type 7 Source Tree Join BGP Route (C-Join, sent from receiver PE towards the Source)
+ops@PE3# run show route advertising-protocol protocol bgp 10.101.5.5 table black.mvpn extensive | find 7:    
+* 7:65000:100:65000:32:10.11.1.1:32:239.1.1.1/240 (1 entry, 1 announced)
+ BGP group RR type Internal
+     Route Distinguisher: 65000:100
+     Nexthop: Self
+     Flags: Nexthop Change
+     MED: 0
+     Localpref: 100
+     AS path: [65000] I 
+     Communities: target:10.101.1.1:8 //here you see an auto-generated community. It's advertised by 10.101.1.1
+//to check what is advertising 10.101.1.1:
+ops@PE1# run show route advertising-protocol bgp 10.101.5.5 extensive | match "routes|entry|communities"              
+
+black.inet.0: 9 destinations, 9 routes (9 active, 0 holddown, 0 hidden)
+* 10.1.1.0/24 (1 entry, 1 announced)
+     Communities: target:65000:111 src-as:65000:0 rt-import:10.101.1.1:8 //this matches what we saw on PE3
+* 10.11.1.0/24 (1 entry, 1 announced)
+     Communities: target:65000:111 src-as:65000:0 rt-import:10.101.1.1:8
+
+white.inet.0: 9 destinations, 9 routes (9 active, 0 holddown, 0 hidden)
+* 10.2.1.0/24 (1 entry, 1 announced)
+     Communities: target:65000:222 src-as:65000:0 rt-import:10.101.1.1:9
+* 10.22.1.0/24 (1 entry, 1 announced)
+     Communities: target:65000:222 src-as:65000:0 rt-import:10.101.1.1:9
+
+bgp.mvpn.0: 9 destinations, 11 routes (9 active, 0 holddown, 0 hidden)
+* 1:65000:100:10.101.1.1/240 (1 entry, 1 announced)
+     Communities: target:65000:111
+* 1:65000:200:10.101.1.1/240 (1 entry, 1 announced)
+     Communities: target:65000:22
+
+black.mvpn.0: 5 destinations, 6 routes (5 active, 1 holddown, 0 hidden)
+* 1:65000:100:10.101.1.1/240 (1 entry, 1 announced)
+     Communities: target:65000:111
+                                        
+white.mvpn.0: 4 destinations, 5 routes (4 active, 1 holddown, 0 hidden)
+* 1:65000:200:10.101.1.1/240 (1 entry, 1 announced)
+     Communities: target:65000:22
+
+//Source AS and Route Import communities were automatically added when protocols mvpn at the VRFs were configured
+
+//list the internal policies that are currently applied
+ops@PE1# run show policy 
+Configured policies:
+__vrf-export-black-internal__
+__vrf-import-black-internal__
+__vrf-mvpn-export-inet-black-internal__
+__vrf-mvpn-export-inet-white-internal__
+__vrf-mvpn-import-cmcast-black-internal__
+__vrf-mvpn-import-cmcast-leafAD-global-internal__
+__vrf-mvpn-import-cmcast-white-internal__
+white-exp
+white-imp
+
+//look for the internal policy that is adding ht Route Import policy:
+ops@PE1# run show policy __vrf-mvpn-export-inet-black-internal__ 
+Policy __vrf-mvpn-export-inet-black-internal__:
+    Term unnamed:
+        then community + __vrf-mvpn-community-rt_import-black-internal__ [rt-import:10.101.1.1:8 ] community + __vrf-mvpn-community-src_as-black-internal__ [src-as:65000:0 ] accept
+
+//let's verify that CE1 is receiving traffic from source and sending it downstream
+ops@CE1# run show multicast route instance black 
+Instance: black Family: INET
+
+Group: 239.1.1.1
+    Source: 10.11.1.1/32
+    Upstream interface: ge-0/0/5.1
+    Downstream interface list: 
+        ge-0/0/2.1
+    
+
+Group: 239.11.11.11
+    Source: 10.11.1.1/32
+    Upstream interface: ge-0/0/5.1
+
+//check statistics of a multicast stream (like the PPS)
+ops@CE1# run show multicast route instance black extensive                
+Instance: black Family: INET
+
+Group: 239.1.1.1
+    Source: 10.11.1.1/32
+    Upstream interface: ge-0/0/5.1
+    Downstream interface list: 
+        ge-0/0/2.1
+    Number of outgoing interfaces: 1
+    Session description: Organisational Local Scope
+    Statistics: 55 kBps, 40 pps, 5886092 packets         //pps
+    Next-hop ID: 1048575
+    Upstream protocol: PIM
+    Route state: Active
+    Forwarding state: Forwarding
+    Cache lifetime/timeout: forever
+    Wrong incoming interface notifications: 0
+    Uptime: 1d 22:31:49
+
+	
+	 

@@ -1,0 +1,23 @@
+CE4-REC
+
+hostname CE4-REC
+
+ip vrf black
+!
+ip vrf white
+
+interface FastEthernet0/0
+ no shutdown
+ 
+interface FastEthernet0/0.1
+ encapsulation dot1Q 101
+ ip vrf forwarding black
+ ip address 10.11.4.1 255.255.255.0
+
+interface FastEthernet0/0.2
+ encapsulation dot1Q 102
+ ip vrf forwarding white
+ ip address 10.22.4.1 255.255.255.0
+ 
+ip route vrf black 0.0.0.0 0.0.0.0 10.11.4.2
+ip route vrf white 0.0.0.0 0.0.0.0 10.22.4.2

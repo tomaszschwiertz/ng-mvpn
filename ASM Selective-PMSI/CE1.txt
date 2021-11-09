@@ -1,0 +1,36 @@
+CE1
+
+set system host-name CE1
+set system root-authentication encrypted-password "$6$6xO1.HNG$XXqzJ04PBXbkKVc3mk8/O5d32fDLqx6TjVJK7IyGSWdyGKr23VdGxsc7z/jm16bTHCpsVjTzyM8H7CopUZC810"
+set system login user ops uid 2001
+set system login user ops class super-user
+set system login user ops authentication encrypted-password "$6$NO387E/x$1uZlO1gsaec9ki/BVsyc1TNYPeCfPisyJKWy/prV66tNhfgcND3i8xPvzK07osmvL2cv5XXPf8t3HntAB4A2M."
+set system syslog user * any emergency
+set system syslog file messages any notice
+set system syslog file messages authorization info
+set system syslog file interactive-commands interactive-commands any
+set chassis fpc 0 pic 0 tunnel-services bandwidth 1g
+set chassis fpc 0 lite-mode
+set interfaces ge-0/0/2 vlan-tagging
+set interfaces ge-0/0/2 unit 1 vlan-id 101
+set interfaces ge-0/0/2 unit 1 family inet address 10.1.1.2/24
+set interfaces ge-0/0/2 unit 2 vlan-id 102
+set interfaces ge-0/0/2 unit 2 family inet address 10.2.1.2/24
+set interfaces ge-0/0/5 vlan-tagging
+set interfaces ge-0/0/5 unit 1 vlan-id 101
+set interfaces ge-0/0/5 unit 1 family inet address 10.11.1.2/24
+set interfaces ge-0/0/5 unit 2 vlan-id 102
+set interfaces ge-0/0/5 unit 2 family inet address 10.22.1.2/24
+set routing-instances black routing-options static route 0.0.0.0/0 next-hop 10.1.1.1
+set routing-instances black routing-options multicast ssm-groups 239.0.0.0/14
+set routing-instances black protocols pim rp static address 10.111.1.1
+set routing-instances black protocols pim interface all mode sparse
+set routing-instances black instance-type virtual-router
+set routing-instances black interface ge-0/0/2.1
+set routing-instances black interface ge-0/0/5.1
+set routing-instances white routing-options static route 0.0.0.0/0 next-hop 10.2.1.1
+set routing-instances white routing-options multicast ssm-groups 239.0.0.0/8
+set routing-instances white protocols pim interface all mode sparse
+set routing-instances white instance-type virtual-router
+set routing-instances white interface ge-0/0/2.2
+set routing-instances white interface ge-0/0/5.2
